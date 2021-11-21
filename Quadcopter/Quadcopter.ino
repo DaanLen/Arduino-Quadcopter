@@ -6,7 +6,7 @@
 #include <RF24.h>
 
 RF24 radio(7,10); //CE, CSN
-const byte address = "000001";
+const byte address = "00001";
 //Define pins
 
 
