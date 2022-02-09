@@ -34,6 +34,8 @@ uint8_t value;
 //Init Motors
 int potpin = A3;  // analog pin used to connect the potentiometer
 int val;
+//int val2;
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -70,7 +72,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   if (radio.available()){
     radio.read(&Joysticks, sizeof(Joysticks));
-    Serial.println(Joysticks[1]);
+    //Serial.println(Joysticks[1]);
   }
 
 //  Wire.beginTransmission(0x68);
@@ -91,9 +93,10 @@ void loop() {
   UpdateMPU();
   //Serial.print(" ");
   //Serial.println( mpu.rawAx() );
-
-  val = analogRead(potpin);            // reads the value of the potentiometer (value between 0 and 1023)
-  val = map(val, 0, 1023, 1000, 2000);
+  //val2 = analogRead(potpin); 
+  val = Joysticks[0];            // reads the value of the potentiometer (value between 0 and 1023)
+  val = map(val, 0, 511, 1000, 2000);
+  //val2 = map(val2, 0, 1023, 1000, 2000);
   Motor1.writeMicroseconds(val); //set Motor 3 to 10/180
   Motor2.writeMicroseconds(val);
   Motor3.writeMicroseconds(val);
