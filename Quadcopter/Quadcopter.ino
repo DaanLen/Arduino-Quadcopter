@@ -21,25 +21,29 @@ Servo Motor4;
 RF24 radio(8,7);
 
 const byte address[6] = "00001";
-uint16_t Joysticks[] = {0, 0, 0, 0, 0, 0};
+uint16_t Joysticks[] = {0, 0, 0, 0, 0, 0}; //(Thr, Yaw, Pitch, Roll, RotL, RotR}
 
 //Init MPU
 const int MPU_addr=0x68;  // I2C address of the MPU-6050
-int16_t AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ;
+double MPU_data[] = {0, 0, 0, 0, 0, 0}; //Data from MPU {AcX,AcY,AcZ,Tmp,GyX,GyY,GyZ};
 
 basicMPU6050<> mpu;
 
-uint8_t value;
+int Thr;
+float input[] = {0, 0, 0}; //Yaw, Pitch, Roll from Joystick
+double contr[] = {0, 0, 0}; //Yaw, Pitch, Roll to control motors
 
-//Init Motors
-int potpin = A3;  // analog pin used to connect the potentiometer
-int val;
-//int val2;
+double cumerror[] = {0, 0, 0};
+double last_error[] = {0, 0, 0};
+double last_time[] = {0, 0, 0};
+int Kp[] = {10, 10, 10};
+float Ki[] = {0.1, 0.1, 0.1};
+int Kd[] = {1, 1, 1};
 
 
 void setup() {
   // put your setup code here, to run once:
-  //Serial.begin(38400);
+  Serial.begin(38400);
 
   //start radio
   radio.begin();
@@ -74,55 +78,71 @@ void loop() {
     radio.read(&Joysticks, sizeof(Joysticks));
     //Serial.println(Joysticks[1]);
   }
-
-//  Wire.beginTransmission(0x68);
-//  Wire.write(0x75); //Check if 77 address works. if output, then probably 20689, if not. Then WTF is going on
-//  Wire.endTransmission(false);
-//  int n = Wire.requestFrom(0x68, 1);
-//  if( n == 1)
-//  {
-//    uint8_t data = Wire.read();
-//
-//    Serial.print("0x");
-//    Serial.println( data, BIN);
-//  }
-//  else
-//  {
-//    Serial.println("Sensor not found");
-//  }
   UpdateMPU();
-  //Serial.print(" ");
-  //Serial.println( mpu.rawAx() );
-  //val2 = analogRead(potpin); 
-  val = Joysticks[0];            // reads the value of the potentiometer (value between 0 and 1023)
-  val = map(val, 0, 511, 1000, 2000);
-  //val2 = map(val2, 0, 1023, 1000, 2000);
-  Motor1.writeMicroseconds(val); //set Motor 3 to 10/180
-  Motor2.writeMicroseconds(val);
-  Motor3.writeMicroseconds(val);
-  Motor4.writeMicroseconds(val);
-  //Serial.println(val);
-  delay(15);
+  Serial.print(MPU_data[0]);
+  Serial.print(" ");
+  Serial.print(MPU_data[1]);
+  Serial.print(" ");
+  Serial.println(MPU_data[2]);
+  //Assign Throttle
+  Thr = Joysticks[0];            // reads the value of the potentiometer (value between 0 and 1023)
+  Thr = map(Thr, 0, 511, 1000, 2000); //map throttle to PWM signal
+
+  //Assign Yaw Pitch Roll
+  for (byte i = 0; i<= 2; i++){
+    input[i] = Joysticks[i+1];
+  }
+
+  //Map desired rates to deg/s
+  input[0] = map(input[0], 0, 511, -90, 90); //map from 0-511 range to -90 to 90 deg/s desired yaw rate
+  input[1] = map(input[1], 0, 511, -180, 180); //map from 0-511 range to -180 to 180 deg/s desired pitch rate
+  input[2] = map(input[2], 0, 511, -180, 180); //map from 0-511 range to -180 to 180 deg/s desired roll rate
+
+
+  for (byte i = 0; i<= 2; i++){
+    contr[i] = PIDcontrol(i);
+  }
+
+
+  //Write values to motor
+  Motor1.writeMicroseconds(Thr - contr[2]/2 + contr[1]/2 - contr[0]/2); //set Motor 3 to 10/180
+  Motor2.writeMicroseconds(Thr - contr[2]/2 - contr[1]/2 + contr[0]/2);
+  Motor3.writeMicroseconds(Thr + contr[2]/2 + contr[1]/2 + contr[0]/2);
+  Motor4.writeMicroseconds(Thr + contr[2]/2 - contr[1]/2 - contr[0]/2);
+
+
+
+  
+  delay(100);
 }
 
 
 void UpdateMPU(){
-  //Wire.beginTransmission(MPU_addr);
-  //Wire.write(0x3B);  // starting with register 0x3B (ACCEL_XOUT_H)
-  //Wire.endTransmission(false);
-  //Wire.requestFrom(MPU_addr,14,true);  // request a total of 14 registers
-  //AcX=Wire.read()<<8|Wire.read();  // 0x3B (ACCEL_XOUT_H) & 0x3C (ACCEL_XOUT_L)    
-  //AcY=Wire.read()<<8|Wire.read();  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L)
-  //AcZ=Wire.read()<<8|Wire.read();  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L)
-  //Tmp=Wire.read()<<8|Wire.read();  // 0x41 (TEMP_OUT_H) & 0x42 (TEMP_OUT_L)
-  //GyX=Wire.read()<<8|Wire.read();  // 0x43 (GYRO_XOUT_H) & 0x44 (GYRO_XOUT_L)
-  //GyY=Wire.read()<<8|Wire.read();  // 0x45 (GYRO_YOUT_H) & 0x46 (GYRO_YOUT_L)
-  //GyZ=Wire.read()<<8|Wire.read();  // 0x47 (GYRO_ZOUT_H) & 0x48 (GYRO_ZOUT_L)
-  Serial.print("AcX = "); Serial.print(mpu.ax());
-  Serial.print(" | AcY = "); Serial.print(mpu.ay());
-  Serial.print(" | AcZ = "); Serial.print(mpu.az());
-  Serial.print(" | Tmp = "); Serial.print(mpu.temp()/340.00+36.53);  //equation for temperature in degrees C from datasheet
-  Serial.print(" | GyX = "); Serial.print(mpu.gx());
-  Serial.print(" | GyY = "); Serial.print(mpu.gy());
-  Serial.print(" | GyZ = "); Serial.println(mpu.gz());
+  MPU_data[0] = mpu.ax();
+  MPU_data[1] = mpu.ay();
+  MPU_data[2] = mpu.az();
+  MPU_data[3] = mpu.temp()/340.00+36.53;  //equation for temperature in degrees C from datasheet
+  MPU_data[4] = mpu.gx();
+  MPU_data[5] = mpu.gy();
+  MPU_data[6] = mpu.gz();
+}
+
+
+double PIDcontrol(int i){
+  double currentTime = millis();
+  double elapsedTime = currentTime - last_time[i];
+  
+  double error = MPU_data[i+4] - input[i];
+  double derror = (error - last_error[i])/elapsedTime;
+  cumerror[i] += error*elapsedTime;
+  
+  double P = Kp[i]*error;
+  double I = Ki[i]*cumerror[i];
+  double D = Kd[i]*derror;
+
+  double compensation = P+I+D;
+  
+  last_time[i] = currentTime;
+  last_error[i] = error;  
+  return compensation;
 }
